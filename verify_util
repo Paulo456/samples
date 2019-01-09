@@ -1,0 +1,304 @@
+import pak.mysql_smbp as my
+import pak.oracle_foris as ora
+import webbrowser
+import pymysql.cursors
+import cx_Oracle 
+from re import findall
+from os import getcwd
+from pandas import read_sql, DataFrame
+from tkinter import Frame, Tk, Text, Scrollbar, BooleanVar, Checkbutton, Button
+
+def print_df(dataframe):
+    list_columns = list(dataframe.columns)
+    list_columns.sort()
+    df_text=''
+    for column in list_columns:
+        df_text += str(column) + '; '
+    df_text += '\n'
+    for row in range(len(dataframe)):
+        for column in list_columns:
+            df_text += str(dataframe.loc[row,column]) + '; '
+        df_text += '\n'
+    return df_text
+	
+
+class Assembly(Frame):
+	def __init__(self, parent):
+		Frame.__init__(self, parent, background="white")
+		self.parent = parent
+		self.region = ''
+		self.parent.title("verify list")
+		self.pack(fill='both', expand=True)
+		
+		panelFrame = Frame(self)
+		textFrame = Frame(self)
+
+		panelFrame.pack(side='top', fill='both')
+		textFrame.pack(side='bottom', fill='both', expand=True)
+
+		panelFrameTop = Frame(panelFrame, bg='gray70')
+		panelFrameBottom = Frame(panelFrame, bg='gray85')
+
+		panelFrameTop.pack(side='top', fill='both', expand=True)
+		panelFrameBottom.pack(side='bottom', fill='both', expand=True)
+
+		textFrameLeft = Frame(textFrame)
+		textFrameRight = Frame(textFrame)
+
+		textFrameLeft.pack(side='left', fill='both', expand=True)
+		textFrameRight.pack(side='right', fill='both', expand=True)
+
+		textFrameRightTop = Frame(textFrameRight)
+		textFrameRightBottom = Frame(textFrameRight)
+
+		textFrameRightTop.pack(side='top', fill='both', expand=True)
+		textFrameRightBottom.pack(side='bottom', fill='both', expand=True)
+
+		self.txtBox_left = TxtBox(textFrameLeft)
+		self.txtBox_rtop = TxtBox(textFrameRightTop)
+		self.txtBox_rbottom = TxtBox(textFrameRightBottom)
+
+		self.check_smbp_var = BooleanVar()
+		check_smbp = Checkbutton(panelFrameTop, text='SMBP_SIDE', variable=self.check_smbp_var, bg='gray70')
+		self.check_smbp_var.set(True)
+		check_smbp.pack(side='left', padx=5, pady=5)
+
+		self.check_smbp_td_var = BooleanVar()
+		check_smbp_td = Checkbutton(panelFrameTop, text='TD', variable=self.check_smbp_td_var, bg='gray70')
+		self.check_smbp_td_var.set(True)
+		check_smbp_td.pack(side='left', padx=5, pady=5)
+
+		self.check_smbp_pa_var = BooleanVar()
+		check_smbp_pa = Checkbutton(panelFrameTop, text='PA', variable=self.check_smbp_pa_var, bg='gray70')
+		self.check_smbp_pa_var.set(False)
+		check_smbp_pa.pack(side='left', padx=5, pady=5)
+
+		self.check_smbp_contr_var = BooleanVar()
+		check_smbp_contr = Checkbutton(panelFrameTop, text='Contr', variable=self.check_smbp_contr_var, bg='gray70')
+		self.check_smbp_contr_var.set(False)
+		check_smbp_contr.pack(side='left', padx=5, pady=5)
+
+		self.check_smbp_cust_var = BooleanVar()
+		check_smbp_cust = Checkbutton(panelFrameTop, text='Cust', variable=self.check_smbp_cust_var, bg='gray70')
+		self.check_smbp_cust_var.set(False)
+		check_smbp_cust.pack(side='left', padx=5, pady=5)
+		
+		self.check_umrs_var = BooleanVar()
+		check_umrs = Checkbutton(panelFrameTop, text='UMRS', variable=self.check_umrs_var, bg='gray85')
+		self.check_umrs_var.set(True)
+		check_umrs.pack(side='left', padx=30, pady=5)
+
+		btn_run = Button(panelFrameTop, text='Обработать', command=self.fetch_list, bg='gray70')
+		btn_run.pack(side='right', padx=10, pady=1)
+
+		# foris-side
+		self.check_foris_var = BooleanVar()
+		check_foris = Checkbutton(panelFrameBottom, text='FORIS_SIDE', variable=self.check_foris_var, bg='gray85')
+		self.check_foris_var.set(True)
+		check_foris.pack(side='left', padx=5, pady=5)
+
+		self.check_foris_td_var = BooleanVar()
+		check_foris_td = Checkbutton(panelFrameBottom, text='TD', variable=self.check_foris_td_var, bg='gray85')
+		self.check_foris_td_var.set(True)
+		check_foris_td.pack(side='left', padx=5, pady=5)
+
+		self.check_foris_pa_var = BooleanVar()
+		check_foris_pa = Checkbutton(panelFrameBottom, text='PA', variable=self.check_foris_pa_var, bg='gray85')
+		self.check_foris_pa_var.set(False)
+		check_foris_pa.pack(side='left', padx=5, pady=5)
+
+		self.check_foris_contr_var = BooleanVar()
+		check_foris_contr = Checkbutton(panelFrameBottom, text='Contr', variable=self.check_foris_contr_var, bg='gray85')
+		self.check_foris_contr_var.set(False)
+		check_foris_contr.pack(side='left', padx=5, pady=5)
+
+		self.check_foris_cust_var = BooleanVar()
+		check_foris_cust = Checkbutton(panelFrameBottom, text='Cust', variable=self.check_foris_cust_var, bg='gray85')
+		self.check_foris_cust_var.set(False)
+		check_foris_cust.pack(side='left', padx=5, pady=5)
+
+		btn_run = Button(panelFrameBottom, text='Открыть в browser verify-tool', command=self.open_browser, bg='gray85')
+		btn_run.pack(side='right', padx=10, pady=1)
+
+		def on_change_smbp(*args):
+			self.check_smbp_td_var.set(self.check_smbp_var.get())
+			self.check_smbp_pa_var.set(self.check_smbp_var.get())
+			self.check_smbp_contr_var.set(self.check_smbp_var.get())
+			self.check_smbp_cust_var.set(self.check_smbp_var.get())
+
+		def on_change_foris(*args):
+			self.check_foris_td_var.set(self.check_foris_var.get())
+			self.check_foris_pa_var.set(self.check_foris_var.get())
+			self.check_foris_contr_var.set(self.check_foris_var.get())
+			self.check_foris_cust_var.set(self.check_foris_var.get())
+		
+		self.check_smbp_var.trace('w', on_change_smbp)  
+		self.check_foris_var.trace('w', on_change_foris)  
+	
+	def open_browser(self):
+		if self.region:
+			webbrowser.get("C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s").open(ora.instance_web_dict[self.region])
+		else:
+			self.txtBox_rbottom.txt_box.insert('end', 'Необходимо определить МР: \n' + str(ora.instance_web_dict))
+			
+	def fetch_list(self):
+		msisdn_set = set(findall(r'\d+', self.txtBox_left.txt_box.get("1.0", "end-1c")))
+		if not msisdn_set:
+			self.txtBox_left.txt_box.delete('1.0', 'end')
+			self.txtBox_left.txt_box.insert('end', 'необходимо внести хотя бы один номер MSISDN')
+			return False
+			
+		self.txtBox_left.txt_box.delete('1.0', 'end')
+		self.txtBox_left.txt_box.insert('end', str(msisdn_set))
+
+		msisdn = msisdn_set.pop()
+		msisdn_set.add(msisdn)
+		
+		for instance in ora.instance_list:
+			connection = cx_Oracle.connect(instance['connect_string'])
+			mr_dict = instance
+			sql = f"select td.terminal_device_id from cust.terminal_device td where td.msisdn='{msisdn}'"
+			df = read_sql(sql, con=connection)
+			if len(df) > 0:
+				break
+			connection.close()
+		
+		self.region = mr_dict['instance']
+		dict_data = {}
+		
+		for msisdn in msisdn_set:
+			dict_data[msisdn] = {}
+			for entity in ora.sql_list_closed_data_verify:
+				dict_data[msisdn][entity] = []
+				sql = ora.sql_list_closed_data_verify[entity].format(msisdn=msisdn)
+				df = read_sql(sql, con=connection)
+				for row_df in range(len(df)):
+					dict_data[msisdn][entity].append(df.loc[row_df,'VALUE1'])
+				
+		print(dict_data)
+		
+		connection.close()
+		
+		customer_id_set = set()
+		for msisdn in dict_data:
+			for entity in dict_data[msisdn]:
+				customer_id_set.update(set(dict_data[msisdn][entity]))
+		print(customer_id_set)
+		
+		for instance in my.instance_mysql_list:
+			if mr_dict['instance'] == instance['instance']:
+				mysql_dict = instance
+		
+		connection = pymysql.connect(host=mysql_dict['host'], user=mysql_dict['login'], password=mysql_dict['passwd'], charset=mysql_dict['encoding'], cursorclass=pymysql.cursors.DictCursor)
+		
+		
+		customer_id_set_cut=''
+		n = 0
+		df_collect = read_sql('select now() as customer_id;', con=connection)
+		
+		for i in customer_id_set:
+			n += 1
+			customer_id_set_cut += str(i) + ','
+			if n == 500:
+				n = 0
+				customer_id_set_cut = customer_id_set_cut[:-1]+');'
+				sql_mysql = f"""select p.customer_id, p.date_from, p.description 
+					from verification.Problem p 
+					where p.date_to is null and p.customer_id in ({customer_id_set_cut}"""
+				df_mysql = read_sql(sql_mysql, con=connection)
+				df_collect = df_collect.append(df_mysql, ignore_index=True)
+				cursor_mysql = connection.cursor()
+				cursor_mysql.execute(f"update verification.Problem p set p.date_to = now() where p.customer_id in({customer_id_set_cut}")
+				cursor_mysql.close()
+				connection.commit()
+				customer_id_set_cut=''
+				
+		if customer_id_set_cut != '':
+			customer_id_set_cut = customer_id_set_cut[:-1]+');'
+			sql_mysql = f"""select p.customer_id, p.date_from, p.description 
+				from verification.Problem p 
+				where p.date_to is null and p.customer_id in ({customer_id_set_cut}"""
+
+			df_mysql = read_sql(sql_mysql, con=connection)
+			df_collect = df_collect.append(df_mysql, ignore_index=True)
+			
+			cursor_mysql = connection.cursor()
+			cursor_mysql.execute(f"update verification.Problem p set p.date_to = now() where p.customer_id in({customer_id_set_cut}")
+			cursor_mysql.close()
+			connection.commit()
+				
+		df_collect.fillna('---',inplace=True)
+		
+		self.txtBox_rbottom.txt_box.delete('1.0', 'end')
+		self.txtBox_rbottom.txt_box.insert('end', print_df(df_collect))
+		f = open(getcwd() + r'\pyscripts\log_verify_list.log', 'a')
+		f.write(print_df(df_collect))
+		f.close()
+		connection.close()
+		
+		verify_foris_dict = {'TD':'TD_FORIS_SIDE', 'PA':'PA_FORIS_SIDE', 'Contr':'CONTRACT_FORIS_SIDE', 'Cust':'CUSTOMER_FORIS_SIDE'}
+		verify_smbp_dict = {'TD':'TD_SMBP_SIDE', 'PA':'PA_SMBP_SIDE', 'Contr':'CONTRACT_SMBP_SIDE', 'Cust':'CUSTOMER_SMBP_SIDE', 'UMRS':'TD_UMRS'}
+		text_all = ''
+		string = ''
+		
+		def string_plus(numb, entity, verify_dict):
+			string = str(numb) + ';' + str(numb) + ';;;' + '{' + entity + '}' + ';1\n'
+			string = string.format(**verify_dict)
+			return string
+			
+		for msisdn in dict_data:
+			for entity in dict_data[msisdn]:
+				for numb in dict_data[msisdn][entity]:
+					if self.check_smbp_var.get():
+						if self.check_smbp_td_var.get() and entity == 'TD':
+							text_all += string_plus(numb, entity, verify_smbp_dict)
+						if self.check_smbp_pa_var.get() and entity == 'PA':
+							text_all += string_plus(numb, entity, verify_smbp_dict)
+						if self.check_smbp_contr_var.get() and entity == 'Contr':
+							text_all += string_plus(numb, entity, verify_smbp_dict)
+						if self.check_smbp_cust_var.get() and entity == 'Cust':
+							text_all += string_plus(numb, entity, verify_smbp_dict)
+					if self.check_umrs_var.get() and entity == 'TD':
+						text_all += string_plus(numb, 'UMRS', verify_smbp_dict)
+							
+							
+					if self.check_foris_var.get():
+						if self.check_foris_td_var.get() and entity == 'TD':
+							text_all += string_plus(numb, entity, verify_foris_dict)
+						if self.check_foris_pa_var.get() and entity == 'PA':
+							text_all += string_plus(numb, entity, verify_foris_dict)
+						if self.check_foris_contr_var.get() and entity == 'Contr':
+							text_all += string_plus(numb, entity, verify_foris_dict)
+						if self.check_foris_cust_var.get() and entity == 'Cust':
+							text_all += string_plus(numb, entity, verify_foris_dict)
+		
+		self.txtBox_rtop.txt_box.delete('1.0', 'end')
+		self.txtBox_rtop.txt_box.insert('end', text_all)
+		
+		f = open(getcwd() + r'\pyscripts\verify_list.csv', 'w')
+		f.write(text_all)
+		f.close()
+		self.clipboard_clear()
+		self.clipboard_append(getcwd() + r'\pyscripts\verify_list.csv')
+		
+		
+
+class TxtBox():
+
+	def __init__(self, txt_frame):
+		self.txt_frame = txt_frame
+		self.txt_box = Text(self.txt_frame, font='Tahoma 11', wrap='word', width=1, height=1)
+		self.scrollbar = Scrollbar(self.txt_frame)
+		self.scrollbar['command'] = self.txt_box.yview
+		self.txt_box['yscrollcommand'] = self.scrollbar.set
+		self.txt_box.pack(side='left', fill='both', expand=True)
+		self.scrollbar.pack(side='right', fill='y')
+
+def main():
+	root = Tk()
+	root.geometry("800x600+300+100")
+	Assembly(root)
+	root.mainloop()
+
+if __name__ == '__main__':
+	main()
